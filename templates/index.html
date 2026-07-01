@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VidCore Stream Extractor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0f14;
+      --surface: #161920;
+      --surface2: #1e2230;
+      --border: #2a2f42;
+      --accent: #5b6ef5;
+      --accent-glow: rgba(91,110,245,0.18);
+      --accent2: #a78bfa;
+      --text: #e8eaf0;
+      --muted: #6b7280;
+      --success: #34d399;
+      --error: #f87171;
+      --warn: #fbbf24;
+      --radius: 10px;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+    }
+    header .logo {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    header h1 {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+    header span {
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: 4px;
+    }
+
+    /* ── Layout ── */
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 36px 24px 80px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    /* ── Type toggle ── */
+    .type-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .type-btn {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .type-btn.active {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── Form fields ── */
+    .fields {
+      display: grid;
+      gap: 14px;
+    }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus { border-color: var(--accent); }
+    input::placeholder { color: var(--muted); }
+
+    /* ── Button ── */
+    button.fetch-btn {
+      width: 100%;
+      padding: 13px;
+      margin-top: 8px;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      letter-spacing: 0.02em;
+    }
+    button.fetch-btn:hover { opacity: 0.88; }
+    button.fetch-btn:active { transform: scale(0.99); }
+    button.fetch-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Status bar ── */
+    #status {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+    #status.loading { background: rgba(91,110,245,0.1); border: 1px solid rgba(91,110,245,0.3); color: var(--accent); display: flex; }
+    #status.error   { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.3); color: var(--error); display: flex; }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(91,110,245,0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Results ── */
+    #results { display: none; }
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .result-count {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .result-count strong { color: var(--success); }
+
+    .server-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .server-card.has-error { border-color: rgba(248,113,113,0.3); }
+
+    .server-head {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .server-name {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; font-weight: 600;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--success); flex-shrink: 0;
+    }
+    .dot.err { background: var(--error); }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 20px;
+      letter-spacing: 0.05em;
+    }
+    .badge.ok { background: rgba(52,211,153,0.12); color: var(--success); }
+    .badge.fail { background: rgba(248,113,113,0.12); color: var(--error); }
+
+    .server-body { padding: 18px; }
+
+    .data-block {
+      display: flex; flex-direction: column; gap: 10px;
+    }
+
+    .field-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 4px;
+    }
+
+    .code-box {
+      position: relative;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 12px 42px 12px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent2);
+      word-break: break-all;
+      line-height: 1.6;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 8px; right: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      padding: 3px 8px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+    .copy-btn.copied { color: var(--success); border-color: var(--success); }
+
+    .url-entry {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 10px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+    }
+    .url-label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .url-text {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: #7dd3fc;
+      word-break: break-all;
+    }
+
+    .stream-urls { display: flex; flex-direction: column; gap: 8px; }
+
+    .error-msg {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--error);
+      background: rgba(248,113,113,0.06);
+      border: 1px solid rgba(248,113,113,0.2);
+      border-radius: 7px;
+      padding: 12px 14px;
+    }
+
+    /* tv-only fields */
+    #tv-fields { display: grid; }
+
+    @media (max-width: 600px) {
+      .field-row { grid-template-columns: 1fr; }
+      header { padding: 14px 16px; }
+      main { padding: 20px 14px 60px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">▶</div>
+  <h1>VidCore Extractor <span>/ stream resolver</span></h1>
+</header>
+
+<main>
+
+  <!-- Input card -->
+  <div class="card">
+    <div class="card-title">Source</div>
+
+    <div class="type-toggle">
+      <button class="type-btn active" data-type="tv" onclick="setType('tv')">📺 TV Series</button>
+      <button class="type-btn" data-type="movie" onclick="setType('movie')">🎬 Movie</button>
+    </div>
+
+    <div class="fields">
+      <div class="field">
+        <label>TMDB ID</label>
+        <input type="text" id="tmdb_id" placeholder="e.g. 1399" value="1399"/>
+      </div>
+      <div class="field-row" id="tv-fields">
+        <div class="field">
+          <label>Season</label>
+          <input type="number" id="season" placeholder="1" value="1" min="1"/>
+        </div>
+        <div class="field">
+          <label>Episode</label>
+          <input type="number" id="episode" placeholder="1" value="1" min="1"/>
+        </div>
+      </div>
+      <button class="fetch-btn" id="fetch-btn" onclick="fetchStreams()">
+        Extract Streams
+      </button>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div id="status">
+    <div class="spinner" id="spinner"></div>
+    <span id="status-text">Fetching streams…</span>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="result-header">
+      <div class="card-title" style="margin:0">Results</div>
+      <div class="result-count">Found <strong id="result-count">0</strong> server(s)</div>
+    </div>
+    <div id="result-list"></div>
+  </div>
+
+</main>
+
+<script>
+  let currentType = 'tv';
+
+  function setType(type) {
+    currentType = type;
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+    document.getElementById('tv-fields').style.display = type === 'tv' ? 'grid' : 'none';
+  }
+
+  function showStatus(msg, mode) {
+    const el = document.getElementById('status');
+    document.getElementById('status-text').textContent = msg;
+    el.className = mode;
+    document.getElementById('spinner').style.display = mode === 'loading' ? 'block' : 'none';
+  }
+
+  function hideStatus() {
+    document.getElementById('status').style.display = 'none';
+  }
+
+  async function fetchStreams() {
+    const tmdbId = document.getElementById('tmdb_id').value.trim();
+    if (!tmdbId) { alert('Please enter a TMDB ID.'); return; }
+
+    const btn = document.getElementById('fetch-btn');
+    btn.disabled = true;
+    document.getElementById('results').style.display = 'none';
+    showStatus('Contacting VidCore…', 'loading');
+
+    const body = {
+      type: currentType,
+      tmdb_id: tmdbId,
+      season: document.getElementById('season')?.value || '1',
+      episode: document.getElementById('episode')?.value || '1',
+    };
+
+    try {
+      const res = await fetch('/api/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        showStatus(data.error || 'Request failed.', 'error');
+        return;
+      }
+
+      hideStatus();
+      renderResults(data.results);
+    } catch (e) {
+      showStatus('Network error: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderResults(results) {
+    const container = document.getElementById('result-list');
+    container.innerHTML = '';
+    document.getElementById('result-count').textContent = results.length;
+
+    results.forEach((r, i) => {
+      const hasError = !!r.error;
+      const card = document.createElement('div');
+      card.className = 'server-card' + (hasError ? ' has-error' : '');
+
+      let bodyHTML = '';
+
+      if (hasError) {
+        bodyHTML = `<div class="server-body"><div class="error-msg">⚠ ${escHtml(r.error)}</div></div>`;
+      } else {
+        const d = r.data;
+        const isObj = typeof d === 'object' && d !== null;
+
+        let streamSection = '';
+        if (isObj) {
+          // Try to find m3u8 / mp4 urls inside the object
+          const urls = extractUrls(d);
+          if (urls.length) {
+            streamSection = `
+              <div>
+                <div class="field-label">Stream URLs</div>
+                <div class="stream-urls">
+                  ${urls.map(u => `
+                    <div class="url-entry">
+                      <div class="url-label">${escHtml(u.label || 'URL')}</div>
+                      <div class="url-text">${escHtml(u.url)}</div>
+                    </div>`).join('')}
+                </div>
+              </div>`;
+          }
+        }
+
+        const rawJson = JSON.stringify(d, null, 2);
+        const id = `raw-${i}`;
+
+        streamSection += `
+          <div>
+            <div class="field-label">Referer</div>
+            <div class="code-box">${escHtml(r.referer || '')}</div>
+          </div>
+          <div>
+            <div class="field-label">Raw Response</div>
+            <div class="code-box" id="${id}" style="white-space:pre-wrap">${escHtml(rawJson)}
+              <button class="copy-btn" onclick="copyText('${id}', this)">Copy</button>
+            </div>
+          </div>`;
+
+        bodyHTML = `<div class="server-body"><div class="data-block">${streamSection}</div></div>`;
+      }
+
+      card.innerHTML = `
+        <div class="server-head">
+          <div class="server-name">
+            <div class="dot ${hasError ? 'err' : ''}"></div>
+            ${escHtml(r.server || `Server ${i+1}`)}
+          </div>
+          <span class="badge ${hasError ? 'fail' : 'ok'}">${hasError ? 'Failed' : 'OK'}</span>
+        </div>
+        ${bodyHTML}`;
+
+      container.appendChild(card);
+    });
+
+    document.getElementById('results').style.display = 'block';
+  }
+
+  function extractUrls(obj, label='', results=[]) {
+    if (typeof obj === 'string') {
+      if (/https?:\/\/.+\.(m3u8|mp4|webm)/i.test(obj) || /https?:\/\/.+/i.test(obj)) {
+        results.push({ label: label || 'url', url: obj });
+      }
+      return results;
+    }
+    if (Array.isArray(obj)) {
+      obj.forEach((v, i) => extractUrls(v, label ? `${label}[${i}]` : `[${i}]`, results));
+    } else if (obj && typeof obj === 'object') {
+      for (const [k, v] of Object.entries(obj)) {
+        extractUrls(v, label ? `${label}.${k}` : k, results);
+      }
+    }
+    return results;
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function copyText(elId, btn) {
+    const el = document.getElementById(elId);
+    const text = el.innerText.replace(/\nCopy$/, '').trim();
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = '✓ Copied';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    } catch {}
+  }
+</script>
+
+</body>
+</html>
